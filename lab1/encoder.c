@@ -1,4 +1,6 @@
 #include<stdio.h>
+#include<string.h>
+#include<stdlib.h>
 
 void task_1a(int argc, char **argv){
 
@@ -15,7 +17,66 @@ void task_1a(int argc, char **argv){
 	}
 }
 
+
+void task_1b(int argc, char **argv){
+
+	int debug_flag = 0;
+	for(int i=1; i < argc; i=i+1){
+		if(!strcmp("-D", argv[i])){
+			debug_flag = 1;
+		} else {
+			printf("Invalid paramater\n");
+			fflush(stdout);
+			return;
+		}
+	}
+
+
+        int c_input = -1;
+
+	int len = 128, at_index = 0;
+	char *input = (char *)malloc(sizeof(char)*len);
+
+        c_input = fgetc(stdin);
+
+        while(c_input > -1){
+		if(c_input != 10){
+			int c_input1 = c_input;
+
+                	if(c_input > 96 & c_input < 123){
+                	        c_input = c_input - 32;
+                	}
+
+			if(at_index == len){
+				len = len * 2;
+				char *tmp_input = (char *) malloc(sizeof(char)*len);
+				strcpy(tmp_input, input);
+				free(input);
+				input = tmp_input;
+			}
+			input[at_index] = c_input;
+			at_index = at_index + 1;
+
+			if(debug_flag){
+                		fprintf(stderr, "%d\t%d\n", c_input1, c_input);
+			}
+		} else {
+			printf("%s\n", input);
+			fflush(stdout);
+			for(int i=0; i < at_index; i=i+1){
+				input[i] = 0;
+			}
+			at_index = 0;
+		}
+                c_input = fgetc(stdin);
+
+        }
+}
+
+
+
 int main(int argc, char **argv){
-	task_1a(argc, argv);
+//	task_1a(argc, argv);
+	task_1b(argc, argv);
 	return 0;
 }
