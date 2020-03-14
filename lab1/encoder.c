@@ -133,10 +133,8 @@ void task_1c(int argc, char **argv){
 
 		input = fgetc(stdin);
 	}
-
-	
-
 }
+
 
 void task_1d(int argc, char **argv){
 	
@@ -210,15 +208,87 @@ void task_1d(int argc, char **argv){
 
 		input = fgetc(stdin);
 	}
+}
 
+void task_2(int argc, char **argv){
 	
+	int enc = 0;
+	int key_len = 0, fileName_len = 0;
+	char *key = 0, *fileName = 0;
+	FILE *read_from = stdin;
+	
+	for(int i=1; i < argc; i=i+1){
+		int len;
+		if((len = strlen(argv[i])) > 2){
+			if(argv[i][0] == '-' & argv[i][1] == 'i'){
+				fileName_len = strlen(argv[i]) - 2;
+				fileName = (argv[i] + 2);
+				continue;
+			}
 
+			if(argv[i][0] == '-' & argv[i][1] == 'e'){
+				enc = -1;
+				key_len = len - 2;
+				key = (argv[i] + 2);
+			} else {
+				if(argv[i][0] == '+' & argv[i][1] == 'e'){
+					enc = 1;
+					key_len = len - 2;
+					key = (argv[i] + 2);
+				} else {
+					fprintf(stderr, "Invalid paramater");
+					return;	
+				}
+			}
+		} else {
+			fprintf(stderr, "Invalid paramater");
+			return;
+		}
+	}
+
+	if(fileName != 0){
+		read_from = fopen(fileName, "r");
+	}
+
+	int input = -1;
+	int at_key_index = 0;
+
+	input = fgetc(read_from);
+
+	while(input > -1){
+	
+		if(input != 10){
+			char key_char = 0;
+			if(key != 0){
+				key_char = (enc)*(key[at_key_index] - 48);
+			} else {
+				if(input > 96 & input < 123){
+					key_char = -32;				
+				}
+			}
+
+			input = input + key_char;
+			fputc(input, stdout);
+			
+			if(at_key_index == key_len - 1){
+				at_key_index = 0;		
+			} else {
+				at_key_index = at_key_index + 1;
+			}
+		} else {
+			at_key_index = 0;
+			fputc(input, stdout);
+		}
+
+		input = fgetc(read_from);
+	}
 }
 
 int main(int argc, char **argv){
 //	task_1a(argc, argv);
 //	task_1b(argc, argv);
 //	task_1c(argc, argv);
-	task_1d(argc, argv);
+//	task_1d(argc, argv);
+	task_2(argc, argv);
 	return 0;
 }
