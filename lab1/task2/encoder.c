@@ -35,7 +35,7 @@ void printUpperCase(){
 
 void printEncryptedKey(int enc_flag, char *key, int len){
 
-    char defult_key = (enc_flag)*32;
+    char defult_key = 16;
     if(len == 0){
         key = &defult_key;
         len = 1;
