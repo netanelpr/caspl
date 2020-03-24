@@ -1,0 +1,10 @@
+The code may lead to seg fault.
+In the words function char *words if count is 1
+then the program tries to set other segment which dont have write
+access.
+
+The data in 565617c0
+
+56561000-56562000 r-xp 00000000 08:01 1315581                            /home/netanel/Desktop/program/caspl/lab2/task/count
+56562000-56563000 r--p 00000000 08:01 1315581                            /home/netanel/Desktop/program/caspl/lab2/task/count
+56563000-56564000 rw-p 00001000 08:01 1315581
