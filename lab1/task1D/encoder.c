@@ -50,7 +50,7 @@ void printEncryptedKey(int enc_flag, char *key, int len){
 
             inputChar = inputChar + enc_value;
             if(DEBUG_FLAG){
-                if(entered_input == 10){
+                if(entered_input == '\n'){
                     fprintf(stderr, "\n");
                 } else {
                     fprintf(stderr, "%d\t%d\n", entered_input, inputChar);
