@@ -7,4 +7,4 @@ menu_map.o: menu_map.c
 .PHONY: clean
 
 clean:
-	rm *.o count
+	rm *.o menu_map

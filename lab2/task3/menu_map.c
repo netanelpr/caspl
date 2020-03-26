@@ -78,8 +78,9 @@ char* map(char *array, int array_length, char (*f) (char)){
   return mapped_array;
 }
 
-void display_menu(fun_desc function_desc[], size_t length){
-    for(size_t i=0; i < length; i=i+1){
+void display_menu(fun_desc function_desc[], int length){
+    printf("Choose an option:\n");
+    for(int i=0; i < length; i=i+1){
         printf("%d) %s\n",i, function_desc[i].name);
     }
 }
@@ -96,15 +97,15 @@ void menu(){
                                 {"Print string", cprt}, {"Get string", my_get},
                                 {"Quit", quit}, {NULL, NULL}};
     
-    size_t menu_size = sizeof(function_desc)/sizeof(fun_desc) - 1;
-    char *option_input[menu_size+1];
+    int menu_size = (int)(sizeof(function_desc)/sizeof(fun_desc) - 1);
+    char option_input[menu_size+1];
 
     while(1){
         display_menu(function_desc, menu_size);
         printf("Option:");
         fgets(option_input, menu_size, stdin);
         int option = atoi(option_input);
-        if((option > -1) & option <= menu_size){
+        if((option > -1) & (option < menu_size)){
             printf("Within bounds\n");
             carray = map(carray, 5, function_desc[option].fun);
             printf("DONE.\n");
