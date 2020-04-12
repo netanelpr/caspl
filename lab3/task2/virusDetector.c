@@ -236,10 +236,49 @@ void display_menu(fun_desc function_desc[], int length){
     }
 }
 
+void kill_virus(char *fileName, int signitureOffset, int signitureSize){
+    FILE *file = fopen(fileName, "r+");
+    if(file == NULL){
+        fprintf(stderr, "Error openning the file");
+        return;
+    }
+
+    fseek(file, signitureOffset, SEEK_SET);
+    char c[1] = {0x90};
+    for(int i=0; i<signitureSize; i=i+1){
+        fwrite(c, 1,1, file);
+    }
+    fclose(file);
+
+}
+
+void removeV(){
+    char* signitureOffset = (char*)malloc(128);
+    char* signitureSize = (char*)malloc(128);
+    int sO, siS;
+    if((signitureOffset == NULL) | (signitureSize == NULL)){
+        return;
+    }
+
+    fgets(signitureOffset, 128, stdin);
+    signitureOffset[strlen(signitureOffset)-1] = '\0';
+
+
+    fgets(signitureSize, 128, stdin);
+    signitureSize[strlen(signitureSize)-1] = '\0';
+
+    sO = atoi(signitureOffset);
+    siS = atoi(signitureSize);
+    kill_virus(fileName, sO, siS);
+
+    free(signitureSize);
+    free(signitureOffset);
+}
+
 void menu(){
 
     fun_desc function_desc[] = {{"Load signatures", loadS}, {"Print signatures", printS},
-                            {"Detect viruses", detect},
+                            {"Detect viruses", detect}, {"Fix file", removeV},
                             {"Quit", e}, {NULL, NULL}};
     
     int menu_size = (int)(sizeof(function_desc)/sizeof(fun_desc) - 1);
