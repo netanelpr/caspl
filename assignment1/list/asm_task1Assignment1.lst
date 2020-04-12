@@ -1,0 +1,44 @@
+     1                                  section .data
+     2 00000000 25640A00                         format: db "%d" , 10, 0
+     3                                  
+     4                                  section .text
+     5                                      global assFunc
+     6                                      extern c_checkValidity
+     7                                      extern printf
+     8                                  
+     9                                  assFunc:
+    10                                  
+    11 00000000 55                          push ebp
+    12 00000001 89E5                        mov ebp, esp
+    13 00000003 60                          pushad
+    14                                  
+    15 00000004 FF750C                      push dword [ebp + 12]     ; y
+    16 00000007 FF7508                      push dword [ebp + 8]      ; x
+    17                                  
+    18 0000000A E8(00000000)                call c_checkValidity 
+    19 0000000F 83C408                      add esp, 8
+    20                                  
+    21 00000012 83F800                      cmp eax, 0
+    22 00000015 7408                        jz addtion
+    23                                      ; eax = 1
+    24                                      subtraction:
+    25 00000017 8B5508                          mov edx, [ebp + 8]
+    26 0000001A 2B550C                          sub edx, [ebp + 12]
+    27 0000001D EB06                            jmp print_num
+    28                                      ; eax = 0
+    29                                      addtion:
+    30 0000001F 8B5508                          mov edx, [ebp + 8]
+    31 00000022 03550C                          add edx, [ebp + 12]
+    32                                  
+    33                                      print_num:
+    34 00000025 52                              push edx
+    35 00000026 68[00000000]                    push dword format
+    36 0000002B E8(00000000)                    call printf
+    37 00000030 83C408                          add esp, 8
+    38                                      
+    39 00000033 61                          popad
+    40 00000034 5D                          pop ebp
+    41 00000035 C3                          ret
+    42                                  
+    43                                      
+    44                                  
