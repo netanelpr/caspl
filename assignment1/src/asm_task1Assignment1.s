@@ -1,4 +1,4 @@
-section .data
+section .rodata
          format: db "%d" , 10, 0
 
 section .text
