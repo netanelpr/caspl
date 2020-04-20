@@ -5,7 +5,6 @@
 #define BITS_IN_BYTE 8
 #define KB (1 << 10)
 
-char *buffer = NULL;
 char *fileName = NULL;
 
 typedef struct virus {
@@ -20,8 +19,6 @@ struct link {
     link *nextVirus;
     virus *vir;
 };
-
-link* link_ptr = NULL;
 
 int setSigSize(virus *vir, FILE *file){
     unsigned char c1 = '\0', c2 = '\0';
@@ -98,6 +95,15 @@ void printVirus(virus* virus, FILE* output){
     fprintf(output, "\n");
 }
 
+void v_free(virus *v){
+    if(v != NULL){
+        if(v->sig != NULL){
+            free(v->sig);
+        }
+        free(v);
+    }
+}
+
 /* Print the data of every link in list to the given stream. Each item followed by a newline character. */
 void list_print(link *virus_list, FILE* output){
     while(virus_list != NULL){
@@ -125,10 +131,7 @@ link* list_append(link* virus_list, virus* data){
 void list_free(link *virus_list){
     while(virus_list != NULL){
         link *tmp = virus_list->nextVirus;
-        if(virus_list->vir != NULL){
-            free(virus_list->vir->sig);
-            free(virus_list->vir);
-        }
+        v_free(virus_list->vir);
         free(virus_list);
         virus_list = tmp;
     }
@@ -141,9 +144,9 @@ void detect_virus(char *buffer, unsigned int size, link *virus_list){
 
     while(virus_list != NULL){
         unsigned short at_sig = 0;
-
-        for(unsigned int at_buffer = 0; at_buffer < size; at_buffer = at_buffer +1){
-            if(at_sig == virus_list->vir->SigSize -1){
+        int sigSize = virus_list->vir->SigSize;
+        for(unsigned int at_buffer = 0; at_buffer < size; at_buffer = at_buffer + 1){
+            if(at_sig == sigSize -1){
                 printf("At : %d\n",at_buffer - at_sig);
                 printVirus(virus_list->vir, stdout);
                 at_sig = 0;
@@ -162,71 +165,81 @@ void detect_virus(char *buffer, unsigned int size, link *virus_list){
 
 typedef struct fun_desc {
   char *name;
-  void (*fun)();
+  link* (*fun)(link*);
 }fun_desc;
 
-void loadS(){
-    list_free(link_ptr);
-    link_ptr = NULL;
+link* loadS(link* list){
 
-    char* fileName = (char*)malloc(128);
-    FILE *sig = NULL;
+    char* fileName;
+    FILE *sig_file = NULL;
+    virus *vir = NULL;
 
+    if(list != NULL){
+        list_free(list);
+        list = NULL;
+    }
+
+    fileName = (char*)malloc(128);
     if(fileName == NULL){
-        return;
+        return NULL;
     }
 
     fgets(fileName, 128, stdin);
     fileName[strlen(fileName)-1] = '\0';
 
-    sig = fopen(fileName, "r");
-    if(sig == NULL){
-        return;
+    sig_file = fopen(fileName, "r");
+    if(sig_file == NULL){
+        return NULL;
     }
 
-    virus *vir = NULL;
-    while((vir = readVirus(sig)) != NULL){
-        link_ptr = list_append(link_ptr, vir);
+    while((vir = readVirus(sig_file)) != NULL){
+        list = list_append(list, vir);
     }
     
-    fclose(sig);
+    fclose(sig_file);
     free(fileName);
+
+    return list;
 }
 
-void printS(){
-    list_print(link_ptr, stdout);
+link* printS(link* list){
+    list_print(list, stdout);
+    return list;
 }
 
-void e(){
-    if(buffer != NULL){
-        free(buffer);
-    }
-
-    if(link_ptr != NULL){
-        list_free(link_ptr);
+link* e(link* list){
+    if(list != NULL){
+        list_free(list);
     }
     exit(1);
+
+    return list;
 }
 
-void detect(){
+link* detect(link* list){
+    char *buffer;
+
     if(fileName == NULL){
         fprintf(stderr, "Didnt load a file to scan");
-        return;
+        return NULL;
     }
 
     FILE *file = fopen(fileName, "r");
     if(file == NULL){
         fprintf(stderr, "Error openning the file");
-        return;
+        return NULL;
     }
 
     buffer = (char*)malloc(10*KB);
     size_t numbraed = fread(buffer, 1, 10*KB, file);
 
-    detect_virus(buffer, numbraed, link_ptr);
+    detect_virus(buffer, numbraed, list);
+
     free(buffer);
     buffer = NULL;
     fclose(file);
+
+    return list;
 }
 
 void display_menu(fun_desc function_desc[], int length){
@@ -252,12 +265,12 @@ void kill_virus(char *fileName, int signitureOffset, int signitureSize){
 
 }
 
-void removeV(){
+link* removeV(link *list){
     char* signitureOffset = (char*)malloc(128);
     char* signitureSize = (char*)malloc(128);
     int sO, siS;
     if((signitureOffset == NULL) | (signitureSize == NULL)){
-        return;
+        return list;
     }
 
     fgets(signitureOffset, 128, stdin);
@@ -273,6 +286,8 @@ void removeV(){
 
     free(signitureSize);
     free(signitureOffset);
+
+    return list;
 }
 
 void menu(){
@@ -280,18 +295,23 @@ void menu(){
     fun_desc function_desc[] = {{"Load signatures", loadS}, {"Print signatures", printS},
                             {"Detect viruses", detect}, {"Fix file", removeV},
                             {"Quit", e}, {NULL, NULL}};
+
+    link *list = NULL;
     
     int menu_size = (int)(sizeof(function_desc)/sizeof(fun_desc) - 1);
     char option_input[menu_size+1];
 
     while(1){
+        int option;
         display_menu(function_desc, menu_size);
         printf("Option:");
+
         fgets(option_input, 3, stdin);
-        int option = atoi(option_input);
+        sscanf(option_input ,"%d", &option);
+
         if((option > -1) & (option < menu_size)){
             printf("Within bounds\n");
-            function_desc[option].fun();
+            list = function_desc[option].fun(list);
             printf("DONE.\n");
         }
     }
