@@ -5,7 +5,6 @@
         "string_view": "c",
         "initializer_list": "c",
         "utility": "c",
-        "types.h": "c",
-        "stat.h": "c"
+        "unistd.h": "c"
     }
 }
