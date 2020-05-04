@@ -26,7 +26,7 @@ void execute(cmdLine *pCmdLine){
     }
 
     if(pid == 0){
-        if(execvp(pCmdLine->arguments[0], pCmdLine->arguments) == 0){
+        if(execvp(pCmdLine->arguments[0], pCmdLine->arguments) != 0){
             perror("exec error");
             _exit(0);
         }
@@ -45,33 +45,70 @@ void run_cmd_lines(cmdLine *pCmdLine ){
     }
 }
 
-void run_shell(){
+void replace_nl_to_nt(char *str){
+    char * schr = strchr(str, '\n');
 
+    if(schr != NULL){
+        schr[0] = 0;
+    }
+}
+
+int setcwd(char *path_str){
+    if(getcwd(path_str, PATH_MAX) == NULL){
+        perror("getcwd");
+        return -1;
+    }
+    return 1;
+}
+
+int check_cd_cmd(char *input, char *path_str){
+    if(strncmp(input, "cd\n", 3) == 0){
+        return 1;
+    }
+    
+    if(strncmp(input, "cd ", 3) == 0){
+        replace_nl_to_nt(input);
+
+        if(chdir((input + 3)) == 0){
+            if(setcwd(path_str) < 0){
+                return 0;
+            }
+        } else {
+            perror("change dir");
+            return 0;
+        }
+
+        return 1;
+    }
+
+    return -1;
+}
+
+void run_shell(){
     char *path_str = (char*)calloc(PATH_MAX, 1);
     char *input = (char*)calloc(INPUT_SIZE, 1);
     cmdLine *pCmdLine = NULL;
 
-    if(getcwd(path_str, PATH_MAX) == NULL){
+    if(setcwd(path_str) < 0){
         return;
     }
 
 
     for(;;){
+
         printf("%s> ", path_str);
         if(fgets(input, INPUT_SIZE, stdin) != NULL){
+            int is_cd = -1;
             if(strcmp(input, "q\n") == 0){
                 break;
             }
-
-            if(strncmp(input, "cd ", 3) == 0){
-                strchr(input, '\n')[0] = 0;
-                if(chdir((input + 3)) == 0){
-                    if(getcwd(path_str, PATH_MAX) == NULL){
-                        return;
-                    }
-                } else {
-                    fprintf(stderr, "%s\n", strerror(errno));
-                }
+            
+            is_cd = check_cd_cmd(input, path_str);
+            if(is_cd > 0){
+                continue;
+            }
+            if(is_cd == 0){
+                break;
             }
 
             pCmdLine = parseCmdLines(input);
