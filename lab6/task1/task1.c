@@ -64,7 +64,6 @@ void updateProcessList(process **process_list){
 
     while(proc != NULL){
          pid = waitpid(proc->pid, &status, WUNTRACED| 8 | WNOHANG);
-         printf("%d \n",status);
          if (pid == -1) {  /* child ended                 */
             proc->status = TERMINATED;
             proc = proc->next;
@@ -233,44 +232,6 @@ void run_cmd_lines(cmdLine *pCmdLine, process** proc_list){
     }
 }
 
-void replace_nl_to_nt(char *str){
-    char * schr = strchr(str, '\n');
-
-    if(schr != NULL){
-        schr[0] = 0;
-    }
-}
-int setcwd(char *path_str){
-    if(getcwd(path_str, PATH_MAX) == NULL){
-        perror("getcwd");
-        return -1;
-    }
-    return 1;
-}
-
-int check_cd_cmd(char *input, char *path_str){
-    if(strncmp(input, "cd\n", 3) == 0){
-        return 1;
-    }
-    
-    if(strncmp(input, "cd ", 3) == 0){
-        replace_nl_to_nt(input);
-
-        if(chdir((input + 3)) == 0){
-            if(setcwd(path_str) < 0){
-                return 0;
-            }
-        } else {
-            perror("change dir");
-            return 0;
-        }
-
-        return 1;
-    }
-
-    return -1;
-}
-
 //+++++++++++++ var list +++++++++++++//
 
 typedef struct varlist{
@@ -287,7 +248,7 @@ void addToVarList(varlist **list, char *name, char *val){
 
     vl = *list;
     while(vl != NULL){
-        if(strcmp(name, vl->name)){
+        if(strcmp(name, vl->name) == 0){
             free(vl->val);
             vl->val = (char *)malloc(strlen(val));
             if(vl-> val == NULL){
@@ -297,6 +258,7 @@ void addToVarList(varlist **list, char *name, char *val){
             strcpy(vl->val, val);
             return;
         }
+        vl = vl->next;
     }
 
     vl = (varlist *)malloc(sizeof(varlist));
@@ -333,12 +295,104 @@ void print_var_list(varlist *list){
     }
 }
 
-//+++++++++++++ shell +++++++++++++//
-
-void set_var_shell(varlist *varl, cmdLine *pCmdLine){
-
+const char * getVarValue(varlist *varl, const char *name){
+    while(varl != NULL){
+        if(strcmp(name, varl->name) == 0){
+            return varl->val;
+        }
+        varl = varl->next;
+    }
+    return NULL;
 }
 
+int replaceCmdArgsWithVars(cmdLine *pCmdLine, varlist *varl){
+    const char *val;
+
+    for(int i=0; i < pCmdLine->argCount; i = i + 1){
+        if(strncmp(pCmdLine->arguments[i], "$", 1) == 0){
+            val = getVarValue(varl, pCmdLine->arguments[i]+1);
+
+            if(val == NULL){
+                fprintf(stderr, "Var %s is not exists\n", pCmdLine->arguments[i]+1);
+                return 1;
+            } else {
+                replaceCmdArg(pCmdLine, i, val);
+            }
+        } else {
+            if((strncmp(pCmdLine->arguments[i], "~", 1) == 0) &
+                (strlen(pCmdLine->arguments[i]) == 1)){
+                val = getVarValue(varl, pCmdLine->arguments[i]);
+                if(val == NULL){
+                    fprintf(stderr, "Var %s is not exists\n", pCmdLine->arguments[i]+1);
+                    return 1;
+                } else {
+                    replaceCmdArg(pCmdLine, i, val);
+                }
+            }
+        }
+    }
+
+    return 0;
+}
+
+//+++++++++++++ shell +++++++++++++//
+
+void replace_nl_to_nt(char *str){
+    char * schr = strchr(str, '\n');
+
+    if(schr != NULL){
+        schr[0] = 0;
+    }
+}
+
+int setcwd_path(char *path_str){
+    if(getcwd(path_str, PATH_MAX) == NULL){
+        perror("getcwd");
+        return -1;
+    }
+    return 1;
+}
+
+int setcwd(char *path_str, varlist **varl){
+    char *homedir = getenv("HOME");
+
+    if(getcwd(path_str, PATH_MAX) == NULL){
+        perror("getcwd");
+        return -1;
+    }
+
+    if(homedir != NULL){
+        addToVarList(varl, "~", homedir);
+        return 1;
+    } else {
+        return -1;
+    }
+
+    return 1;
+}
+
+int check_cd_cmd(char *input, char *path_str){
+    if(strncmp(input, "cd\n", 3) == 0){
+        return 1;
+    }
+    
+    if(strncmp(input, "cd ", 3) == 0){
+        replace_nl_to_nt(input);
+
+        if(chdir((input + 3)) == 0){
+            if(setcwd_path(path_str) < 0){
+                return 0;
+            }
+        } else {
+            perror("change dir");
+            return 0;
+        }
+
+        return 1;
+    }
+
+    return -1;
+}
 
 void run_shell(){
     char *path_str = (char*)calloc(PATH_MAX, 1);
@@ -347,14 +401,23 @@ void run_shell(){
     process *proc = NULL;
     varlist *varl = NULL;
 
-    if(setcwd(path_str) < 0){
+    if(setcwd(path_str, &varl) < 0){
         return;
     }
 
     for(;;){
         printf("%s> ", path_str);
         if(fgets(input, INPUT_SIZE, stdin) != NULL){
+            if(strlen(input) == 1){
+                continue;
+            }
+
             pCmdLine = parseCmdLines(input);
+            if(replaceCmdArgsWithVars(pCmdLine, varl) != 0){
+                continue;
+            }
+
+
             int is_cd = -1;
 
             if(strcmp(input, "q\n") == 0){
