@@ -156,6 +156,7 @@ void freeProcessList(process* process_list){
     while(process_list != NULL){
         tmp = process_list->next;
         freeCmdLines(process_list->cmd);
+        free(process_list);
         process_list = tmp;
     }
 }
@@ -310,7 +311,7 @@ void addToVarList(varlist **list, char *name, char *val){
     while(vl != NULL){
         if(strcmp(name, vl->name) == 0){
             free(vl->val);
-            vl->val = (char *)malloc(strlen(val));
+            vl->val = (char *)malloc(strlen(val)+1);
             if(vl-> val == NULL){
                 perror("malloc");
                 exit(1);
@@ -328,8 +329,16 @@ void addToVarList(varlist **list, char *name, char *val){
     }
 
     vl->name = (char *)calloc(strlen(name)+1, 1);
+    if(vl-> name == NULL){
+        free(vl);
+        perror("malloc");
+        exit(1);
+    }
+
     vl->val = (char *)calloc(strlen(val)+1, 1);
-    if((vl-> val == NULL) | (vl->name == NULL)){
+    if(vl-> val == NULL){
+        free(vl->name);
+        free(vl);
         perror("malloc");
         exit(1);
     }
@@ -341,10 +350,13 @@ void addToVarList(varlist **list, char *name, char *val){
 }
 
 void freeVarlist(varlist *list){
+    varlist *tmp;
     while(list != NULL){
+        tmp = list->next;
         free(list->name);
         free(list->val);
-        list = list->next;
+        free(list);
+        list = tmp;
     }
 }
 
@@ -474,7 +486,7 @@ void run_shell(){
 
             pCmdLine = parseCmdLines(input);
             if(replaceCmdArgsWithVars(pCmdLine, varl) != 0){
-                free(pCmdLine);
+                freeCmdLines(pCmdLine);
                 continue;
             }
 
@@ -482,23 +494,23 @@ void run_shell(){
             int is_cd = -1;
 
             if(strcmp(input, "q\n") == 0){
-                free(pCmdLine);
+                freeCmdLines(pCmdLine);
                 break;
             }
             
             is_cd = check_cd_cmd(input, path_str);
             if(is_cd > 0){
-                free(pCmdLine);
+                freeCmdLines(pCmdLine);
                 continue;
             }
             if(is_cd == 0){
-                free(pCmdLine);
+                freeCmdLines(pCmdLine);
                 break;
             }
 
             if(strcmp(input, "proc\n") == 0){
                 printProcessList(&proc);
-                free(pCmdLine);
+                freeCmdLines(pCmdLine);
                 continue;
             }
 
@@ -506,10 +518,9 @@ void run_shell(){
                 int pid = 0;
                 sscanf(input+8, "%d\n", &pid);
                 if(pid > 0 && (is_in_the_proc_list(proc, pid) == 1)){
-                    printf("send suspend to %d",pid);
                     kill(pid, SIGTSTP);
                 }
-                free(pCmdLine);
+                freeCmdLines(pCmdLine);
                 continue;
             }
 
@@ -519,7 +530,7 @@ void run_shell(){
                 if(pid > 0 && (is_in_the_proc_list(proc, pid) == 1)){
                     kill(pid, SIGINT);
                 }
-                free(pCmdLine);
+                freeCmdLines(pCmdLine);
                 continue;
             }
 
@@ -529,14 +540,14 @@ void run_shell(){
                 if(pid > 0 && (is_in_the_proc_list(proc, pid) == 1)){
                     kill(pid, SIGCONT);
                 }
-                free(pCmdLine);
+                freeCmdLines(pCmdLine);
                 continue;
             }
             if(pCmdLine->argCount == 3){
                 if(strcmp(pCmdLine->arguments[0], "set") == 0){
                     addToVarList(&varl, pCmdLine->arguments[1],
                                 pCmdLine->arguments[2]);
-                    free(pCmdLine);
+                    freeCmdLines(pCmdLine);
                     continue;
                 }
             }
@@ -544,7 +555,7 @@ void run_shell(){
             if(pCmdLine->argCount == 1){
                 if(strcmp(pCmdLine->arguments[0], "vars") == 0){
                     print_var_list(varl);
-                    free(pCmdLine);
+                    freeCmdLines(pCmdLine);
                     continue;
                 }
             }
