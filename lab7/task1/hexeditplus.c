@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <fcntl.h>
 
 typedef struct {
   char debug_mode;
@@ -80,6 +81,42 @@ void set_unit_size(state *st){
     
 }
 
+void get_location_and_len(size_t *location, size_t *len){
+    char input[128];
+    printf("Please enter <location> <length>\n");
+    fgets(input, 128, stdin);
+    sscanf(input, "%x %d", location, len);
+}
+
+void load_into_memory(state *st){
+    FILE *file;
+    size_t location, len;
+
+    if(st->file_name == NULL){
+        fprintf(stderr, "The file name is not set");
+        return;
+    }
+
+    file = fopen(st->file_name, "r");
+    if(file == NULL){
+        perror("Open file");
+        return;
+    }
+
+    get_location_and_len(&location, &len);
+    if(st->debug_mode != 0){
+        fprintf(stderr, "DEBUG: load int memory\n\tfilename:%s\n\tlocation: %zu\n\tlen: %zu\n", 
+                st->file_name, location, len);
+    }
+
+    fseek(file, location, SEEK_SET);
+    fread(st->mem_buf, st->unit_size, len, file);
+    st->mem_count = len;
+    printf("Loaded %zu units into memory\n", len);
+
+    fclose(file);
+}
+
 void quit(state *st){
     freeStateStruct(st);
     exit(0);
@@ -96,7 +133,7 @@ void menu(){
     int option = 0;
     state *st;
     fun_desc function_desc[] = {{"Toggle Debug Mode", toggle_debug_mode}, {"Set File Name", set_file_name},
-                                {"Set Unit Size", set_unit_size},
+                                {"Set Unit Size", set_unit_size}, {"Load Into Memory", load_into_memory},
                                 {"Quit", quit}, {NULL, NULL}};
     
     int menu_size = (int)(sizeof(function_desc)/sizeof(fun_desc) - 1);
