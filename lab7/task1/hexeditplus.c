@@ -2,9 +2,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
+#include <elf.h>
 
 #define DECIMAL_DISPLAY 0
 #define HEX_DISPLAY 1
+
+#define VM_S 0x08048000
 
 typedef struct {
   char debug_mode;
@@ -15,6 +18,60 @@ typedef struct {
   char dispaly_mode;
 } state;
 
+//+++++++++++ elf +++++++++++//
+
+Elf32_Ehdr* get_elf_header(FILE *file){
+    Elf32_Ehdr *header = (Elf32_Ehdr*)malloc(sizeof(Elf32_Ehdr));
+
+    fseek(file, 0, SEEK_SET);
+    fread((char *)header, sizeof(Elf32_Ehdr), 1, file);
+    
+    return header;
+}
+
+Elf32_Shdr* get_section_of_address(char *file_name, uint address){
+    FILE *file;
+    int section_table_size, index;
+    Elf32_Word sec_offset, section_size;
+    Elf32_Ehdr *header;
+    Elf32_Shdr *shdr = (Elf32_Shdr*)malloc(sizeof(Elf32_Shdr));
+    
+    if(shdr == NULL){
+        return NULL;
+    }
+
+    file = fopen(file_name, "r");
+    if(file == NULL){
+        perror("Open file");
+        free(shdr);
+        return NULL;
+    }
+
+    header = get_elf_header(file);
+    section_table_size = header->e_shnum;
+    sec_offset = header->e_shoff;
+    fseek(file, sec_offset, SEEK_SET);
+    for(index = 0; index < section_table_size; index = index + 1){
+
+            fread((char *)shdr, sizeof(Elf32_Shdr), 1, file);
+
+            section_size = shdr->sh_size;
+            if(shdr->sh_addr <= address){
+                if(address <= (shdr->sh_addr + section_size)){
+                    fclose(file);
+                    return shdr;
+                }
+            }
+    }
+
+    free(shdr);
+    fclose(file);
+    return NULL;
+
+}
+
+//+++++++++++ hexeditplus +++++++++++//
+
 void freeStateStruct(state *st){
     /*if(st->file_name != NULL){
         free(st->file_name);
@@ -23,9 +80,9 @@ void freeStateStruct(state *st){
     if(st->mem_buf !=NULL){
         free(st->mem_buf);
     }*/
-
     free(st);
 }
+
 
 void debug_print(state *st){
     if(st->debug_mode != 0){
@@ -162,7 +219,7 @@ void print_units(FILE* output, char* buffer, int count, int unit_size, char disp
 void get_len_and_addr(int *len, size_t *addr){
     char input[128];
     fgets(input, 128, stdin);
-    sscanf(input, "%d %x", len, addr);
+    sscanf(input, "%x %d", addr, len);
 }
 
 void dispaly_memory_from_state(state *st, int len){    
@@ -173,15 +230,23 @@ void dispaly_memory_from_state(state *st, int len){
 
 void dispaly_memory_from_the_file(state *st, int len, size_t addr){   
     FILE *file;
+    Elf32_Shdr *shdr;
     char *buff = NULL;
+
+    shdr = get_section_of_address(st->file_name, addr);
+    if(shdr == NULL){
+        debug_string_print(st->debug_mode, "Invalid address");
+        return;
+    }
 
     file = fopen(st->file_name, "r");
     if(file == NULL){
         perror("Open file");
+        free(shdr);
         return;
     }
 
-    fseek(file, addr, SEEK_SET);
+    fseek(file, shdr->sh_offset, SEEK_SET);
     buff = (char *)malloc(len * st->unit_size);
     if(buff == NULL){
         perror("Malloc");
@@ -194,6 +259,7 @@ void dispaly_memory_from_the_file(state *st, int len, size_t addr){
     print_units(stdout, buff, len, st->unit_size, st->dispaly_mode);
 
     free(buff);
+    free(shdr);
     fclose(file);
 }
 
@@ -206,12 +272,88 @@ void memory_display(state *st){
         return;
     }
 
+    printf("Enter address and length\n");
     get_len_and_addr(&len, &addr);
     if(addr == 0){
         dispaly_memory_from_state(st, len);
     } else {
-        dispaly_memory_from_the_file(st, len, addr-1);
+        dispaly_memory_from_the_file(st, len, addr);
     }
+}
+
+void write_units(FILE* output, char* buffer, int count, int unit_size) {
+    fwrite(buffer, unit_size, count, output);
+}
+
+void get_save_into_file_data(size_t *s_addr, size_t *t_location, int *len){
+    char input[128];
+
+    printf("Please enter <source-address> <target-location> <length>\n");
+    fgets(input, 128, stdin);
+    sscanf(input, "%x %x %d", s_addr, t_location, len);
+}
+
+void save_into_file(state *st){
+    int len = 0;
+    size_t s_addr = 0, t_location = 0;
+    char *write_buff;
+    FILE *st_file, *hexeditplus_file;
+
+    if(st->file_name == NULL){
+        fprintf(stderr, "The file name is not set");
+        return;
+    }
+    st_file = fopen(st->file_name, "r+");
+
+    get_save_into_file_data(&s_addr, &t_location, &len);
+    if(s_addr == 0){
+        write_buff = (char *)st->mem_buf;
+    } else {
+        write_buff = (char*)s_addr;
+        //write_buff = (char *)malloc(len * st->unit_size);
+
+        /*hexeditplus_file = fopen(st->file_name, "r");
+        if(hexeditplus_file == NULL){
+            perror("Open file");
+            return;
+        }
+
+        fseek(hexeditplus_file, s_addr-1, SEEK_SET);
+        fread(write_buff, st->unit_size, len, hexeditplus_file);
+        fclose(hexeditplus_file);*/
+
+    }
+
+    fseek(st_file, t_location, SEEK_SET);
+    write_units(st_file, write_buff, len, st->unit_size);
+
+    if(write_buff != (char *)st->mem_buf){
+        free(write_buff);
+    }
+    fclose(st_file);
+}
+
+void get_memory_modify_data(size_t *addr, size_t *val){
+    char input[128];
+
+    printf("Please enter <location> <val>\n");
+    fgets(input, 128, stdin);
+    sscanf(input, "%x %x", addr, val);
+}
+
+void memory_modify(state *st){
+    size_t addr, val;
+
+    get_memory_modify_data(&addr, &val);
+
+    if(addr > st->mem_count){
+        printf("Invalid address");
+        return;
+    }
+    printf("print: %x %x\n",addr, val);
+    printf(unit_to_format(st->unit_size), val);
+    printf("\n",addr, val);
+    memcpy((char*)(st->mem_buf + addr), &val, st->unit_size);
 }
 
 void quit(state *st){
@@ -232,6 +374,7 @@ void menu(){
     fun_desc function_desc[] = {{"Toggle Debug Mode", toggle_debug_mode}, {"Set File Name", set_file_name},
                                 {"Set Unit Size", set_unit_size}, {"Load Into Memory", load_into_memory},
                                 {"toggle Display Mode", toggle_display_mode}, {"Memory Display", memory_display},
+                                {"Save Into File", save_into_file}, {"Memory Modify", memory_modify},
                                 {"Quit", quit}, {NULL, NULL}};
     
     int menu_size = (int)(sizeof(function_desc)/sizeof(fun_desc) - 1);
@@ -255,6 +398,19 @@ void menu(){
     }
 }
  
+/*
+2. Entry point of the program is 08048166 which is in the _start, at the call of to deoo_
+    that is a loop for printing A
+    set the address to the stating poist of _start 08048140
+    load memory of enrty point offset 18 unit size 4 replace it with 08048140 and save it into file
+*/
+
 int main(int argc, char **argv){
     menu();
+    /*Elf32_Shdr *shdr = get_section_of_address("abc", 0x080483b0);
+    if(shdr == NULL){
+        printf("Return null\n");
+        return 0;
+    }
+    printf("%x\n", shdr->sh_addr);*/
 }
