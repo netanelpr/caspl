@@ -403,15 +403,6 @@ void menu(){
     that is a loop for printing A
     set the address to the stating poist of _start 08048140
     load memory of enrty point offset 18 unit size 4 replace it with 08048140 and save it into file
-
-3. Main is in the .text section 080483b0 and the offset in file is 0003b0, 
-    main address is 08048464 and size of 175 bytes
-    the offset of main in the file is 08048464-080483b0 + 0003b0 = 0xb4 + 0003b0 = 000464
-    b. the 3 start byte are 0x55 = push ebp, 0x89 0xe5 = mov ebp, esp
-    c. load 1 byte into memory set the file to abc
-        then modify it to be 0xc3 = ret
-        set with save into file 0 000464 1
-
 */
 
 int main(int argc, char **argv){
