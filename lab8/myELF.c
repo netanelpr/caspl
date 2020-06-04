@@ -194,6 +194,43 @@ typedef struct fun_desc {
   void (*fun)();
 } fun_desc;
 
+typedef struct {
+    void *map_ptr;
+    long size;
+    int fd;
+} MapData;
+
+void map_file_read_private(MapData* map_d, char *file_name){
+    void *map_ptr = NULL;
+    struct stat sb;
+    int fd;
+
+    fd = open(file_name, O_RDONLY);
+    if(fd == -1){
+        map_d->map_ptr = NULL;
+        return;
+    }
+
+    if (fstat(fd, &sb) == -1){
+        map_d->map_ptr = NULL;
+        close(fd);
+        return;
+    }
+
+    map_ptr = mmap(0, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    if (map_ptr == MAP_FAILED){
+        map_d->map_ptr = NULL;
+        close(fd);
+        return;
+    }
+
+    fprintf(stderr,"%p\n", map_ptr);
+    map_d->map_ptr = map_ptr;
+    map_d->size = sb.st_size;
+    map_d->fd = fd;
+
+}
+
 
 void toggle_debug_mode(){
     if(DEBUG_MODE == 0){
@@ -243,36 +280,20 @@ void print_section_names(){
     void *file_map = NULL;
     Elf32_Ehdr *header;
     Elf32_Shdr *section_header, *section_shst_enrty;
-    struct stat sb;
+    MapData map_d;
     char *shst = NULL;
     char file_name[128];
-    int fd;
 
     fgets(file_name, 128, stdin);
     sscanf(file_name, "%s\n", file_name);
 
-    fd = open(file_name, O_RDONLY);
-    if(fd == -1){
-        perror("Open file");
+    map_file_read_private(&map_d, file_name);
+    if(map_d.map_ptr == NULL){
+        perror("Mmap");
         return;
     }
 
-    if (fstat(fd, &sb) == -1){
-        perror("fstat");
-        close(fd);
-        return;
-    }
-
-    if(DEBUG_MODE != 0){
-        fprintf(stderr, "DEBUG: Set file name to %d\n", DEBUG_MODE);
-    }
-
-    file_map = mmap(0, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-    if (file_map == MAP_FAILED){
-        close(fd);
-        perror("mmap");
-        return;
-    }
+    file_map = map_d.map_ptr;
     header = file_map;
 
     section_header = file_map + header->e_shoff;
@@ -281,8 +302,8 @@ void print_section_names(){
 
     print_section_headers(section_header, header->e_shnum, shst);
 
-    munmap(file_map, sb.st_size);
-    close(fd);
+    munmap(file_map, map_d.size);
+    close(map_d.fd);
 
     return;
 } 
@@ -292,36 +313,20 @@ void print_symbols(){
     Elf32_Ehdr *header;
     Elf32_Shdr *section_header, *section_shst_enrty;
     Symble_table symbol_table;
-    struct stat sb;
+    MapData map_d;
     char *shst = NULL;
     char file_name[128];
-    int fd;
 
     fgets(file_name, 128, stdin);
     sscanf(file_name, "%s\n", file_name);
 
-    fd = open(file_name, O_RDONLY);
-    if(fd == -1){
-        perror("Open file");
+    map_file_read_private(&map_d, file_name);
+    if(map_d.map_ptr == NULL){
+        perror("Mmap");
         return;
     }
 
-    if (fstat(fd, &sb) == -1){
-        perror("fstat");
-        close(fd);
-        return;
-    }
-
-    if(DEBUG_MODE != 0){
-        fprintf(stderr, "DEBUG: Set file name to %d\n", DEBUG_MODE);
-    }
-
-    file_map = mmap(0, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-    if (file_map == MAP_FAILED){
-        close(fd);
-        perror("mmap");
-        return;
-    }
+    file_map = map_d.map_ptr;
     header = file_map;
 
     section_header = file_map + header->e_shoff;
@@ -332,8 +337,8 @@ void print_symbols(){
 
     print_symbol_table(&symbol_table, section_header, shst);
 
-    munmap(file_map, sb.st_size);
-    close(fd);
+    munmap(file_map, map_d.size);
+    close(map_d.fd);
 
     return;
 }
