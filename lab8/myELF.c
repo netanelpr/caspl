@@ -28,26 +28,26 @@ Elf32_Ehdr* get_elf_header(FILE *file){
 
 void print_header_encoding(char encoding){
     if(encoding == ELFDATANONE){
-        printf("Data encoding : \t\tInvalid\n");
+        printf("Data encoding: \t\t\tInvalid\n");
         return;
     }
 
     if(encoding == ELFDATA2LSB){
-        printf("Data encoding : \t\t2's complement, little endian\n");
+        printf("Data encoding: \t\t\t2's complement, little endian\n");
         return;
     }
 
     if(encoding == ELFDATA2MSB){
-        printf("Data encoding : \t\t2's complement, big endian\n");
+        printf("Data encoding: \t\t\t2's complement, big endian\n");
         return;
     }
 
 }
 
 void print_elf_header(Elf32_Ehdr *header){
-    printf("Megic number: \t\t %c%c%c\n", header->e_ident[1], header->e_ident[2], header->e_ident[3]);
+    printf("Megic number: \t\t\t %c%c%c\n", header->e_ident[1], header->e_ident[2], header->e_ident[3]);
     print_header_encoding(header->e_ident[EI_DATA]);
-    printf("Entry point: \t\t %x\n", header->e_entry);
+    printf("Entry point: \t\t\t %x\n", header->e_entry);
     printf("Section table offset: \t\t %d\n", header->e_shoff);
     printf("Section table entries: \t\t %d\n", header->e_shnum);
     printf("Section table size: \t\t %d\n", header->e_shentsize);
@@ -101,8 +101,9 @@ Elf32_Shdr* get_section_of_address(char *file_name, uint address){
 void print_section_t(Elf32_Shdr *header){
     uint32_t t = header->sh_type;
     const char *t_name[] = {"NULL", "PROGBITS", "SYMTAB", "STRTAB", "RELA", "HASH", "DYNAMIC",
-                    "NOTE", "NOBITS", "REL", "SHLIB", "DYNSYM"};
-    if(t > 11){
+                    "NOTE", "NOBITS", "REL", "SHLIB", "DYNSYM", NULL, NULL,
+                    "INIT_ARRAY", "FINI_ARRAY", "PREINIT_ARRAY", "GROUP", "SYMTAB_SHNDX", "NUM"};
+    if(t > 19){
         printf("Add T");
         return;
     }
@@ -116,8 +117,8 @@ void print_section_headers(Elf32_Shdr *header, uint32_t section_t_size, char *sh
     for(; index < section_t_size; ++index){
         printf("[%u]\t",index);
         printf("%s ", (shst + header->sh_name));
-        printf("%x ", header->sh_addr);
-        printf("%x ", header->sh_offset);
+        printf("%08x ", header->sh_addr);
+        printf("%08x ", header->sh_offset);
         printf("%x ", header->sh_size);
         print_section_t(header);
         printf("\n");
@@ -140,7 +141,6 @@ void fill_symble_table_struct(Symble_table *st, void *s_map_ptr, Elf32_Shdr *hea
     for(; index < section_t_size; ++index){
         if(header->sh_type == SHT_SYMTAB){
             st->symble_table = s_map_ptr + header->sh_offset;
-            printf("%x %x\n",header->sh_size, sizeof(Elf32_Sym));
             st->size = header->sh_size / sizeof(Elf32_Sym);
             break;
         }
@@ -181,7 +181,91 @@ void print_symbol_table(Symble_table *st, Elf32_Shdr *header, char *shst){
     }   
 }
 
-//+++++++++++ hexeditplus +++++++++++//
+typedef struct {
+    Elf32_Sym *dynsym;
+    char *dynstr;
+} RelcSectionsInfo;
+
+void set_relc_sections_info(RelcSectionsInfo *rSI, void *map_ptr, Elf32_Shdr *section_header, 
+                            uint32_t section_t_size, char *shst){
+    uint32_t index = 0;
+    int n_set = 0;
+    for(; index < section_t_size; ++index){
+        if(section_header->sh_type == SHT_DYNSYM){
+            if(strcmp(".dynsym", (shst + section_header->sh_name)) == 0){
+                rSI->dynsym = map_ptr + section_header->sh_offset;
+                ++n_set;
+
+                if(n_set == 2){
+                    return;
+                }
+            }
+        }
+
+        if(section_header->sh_type == SHT_STRTAB){
+            if(strcmp(".dynstr", (shst + section_header->sh_name)) == 0){
+                rSI->dynstr = map_ptr + section_header->sh_offset;
+                ++n_set;
+
+                if(n_set == 2){
+                    return;
+                }
+            }
+        }
+
+        ++section_header;
+    }   
+
+}
+
+void print_relocation_data(void *map_ptr, Elf32_Shdr *header, uint32_t section_t_size, char *shst){
+    uint32_t index = 0;
+    size_t list_index, s_size;
+    Elf32_Rela *rela;
+    Elf32_Rel *rel;
+    Elf32_Sym *sym;
+    RelcSectionsInfo rSI;
+
+    set_relc_sections_info(&rSI, map_ptr, header, section_t_size, shst);
+
+
+    for(; index < section_t_size; ++index){
+        if(header->sh_type == SHT_RELA){
+            s_size = header->sh_size / sizeof(Elf32_Rela);
+            
+            printf("Relocation section '%s' at offset %x contains %u entries:\n", 
+                    (shst + header->sh_name), header->sh_offset, s_size);
+            printf("Offset\t\tInfo\tType\tSym.Value\tSym.Name\n");
+            
+            rela = map_ptr + header->sh_offset;
+            for(list_index = 0; list_index < s_size; ++list_index){
+                sym = rSI.dynsym + ELF32_R_SYM(rela->r_info);
+                printf("%08x\t%08x\t%d\t%08x\t%s\n", rela->r_offset, rela->r_info, ELF32_R_TYPE(rela->r_info), 
+                                        sym->st_value, rSI.dynstr + sym->st_name);
+                ++rela;
+            }
+        }  
+        if(header->sh_type == SHT_REL){
+            s_size = header->sh_size / sizeof(Elf32_Rel);
+            
+            printf("Relocation section '%s' at offset %x contains %u entries:\n", 
+                    (shst + header->sh_name), header->sh_offset, s_size);
+            printf("Offset\t\tInfo\tType\tSym.Value\tSym.Name\n");
+
+            rel = map_ptr + header->sh_offset;
+            for(list_index = 0; list_index < s_size; ++list_index){
+                sym = rSI.dynsym + ELF32_R_SYM(rel->r_info);
+                printf("%08x\t%08x\t%d\t%08x\t%s\n", rel->r_offset, rel->r_info, ELF32_R_TYPE(rel->r_info), 
+                                        sym->st_value, rSI.dynstr + sym->st_name);
+                ++rel;
+            }
+        }
+        ++header;
+    }
+
+}
+
+//+++++++++++ elf program +++++++++++//
 
 void debug_string_print(char debug_mode, char *str){
     if(debug_mode != 0){
@@ -224,7 +308,6 @@ void map_file_read_private(MapData* map_d, char *file_name){
         return;
     }
 
-    fprintf(stderr,"%p\n", map_ptr);
     map_d->map_ptr = map_ptr;
     map_d->size = sb.st_size;
     map_d->fd = fd;
@@ -243,13 +326,9 @@ void toggle_debug_mode(){
 }
 
 
-void examine_elf_file(){
+void examine_elf_file(char *file_name){
     Elf32_Ehdr *header;
-    char file_name[128];
     int fd;
-
-    fgets(file_name, 128, stdin);
-    sscanf(file_name, "%s\n", file_name);
 
     fd = open(file_name, O_RDONLY);
     if(fd == -1){
@@ -276,16 +355,12 @@ void examine_elf_file(){
     return;
 }
 
-void print_section_names(){
+void print_section_names(char *file_name){
     void *file_map = NULL;
     Elf32_Ehdr *header;
     Elf32_Shdr *section_header, *section_shst_enrty;
     MapData map_d;
     char *shst = NULL;
-    char file_name[128];
-
-    fgets(file_name, 128, stdin);
-    sscanf(file_name, "%s\n", file_name);
 
     map_file_read_private(&map_d, file_name);
     if(map_d.map_ptr == NULL){
@@ -308,17 +383,13 @@ void print_section_names(){
     return;
 } 
 
-void print_symbols(){
+void print_symbols(char *file_name){
     void *file_map = NULL;
     Elf32_Ehdr *header;
     Elf32_Shdr *section_header, *section_shst_enrty;
     Symble_table symbol_table;
     MapData map_d;
     char *shst = NULL;
-    char file_name[128];
-
-    fgets(file_name, 128, stdin);
-    sscanf(file_name, "%s\n", file_name);
 
     map_file_read_private(&map_d, file_name);
     if(map_d.map_ptr == NULL){
@@ -343,6 +414,34 @@ void print_symbols(){
     return;
 }
 
+void print_relocation(char *file_name){
+    void *file_map = NULL;
+    Elf32_Ehdr *header;
+    Elf32_Shdr *section_header, *section_shst_enrty;
+    MapData map_d;
+    char *shst = NULL;
+
+    map_file_read_private(&map_d, file_name);
+    if(map_d.map_ptr == NULL){
+        perror("Mmap");
+        return;
+    }
+
+    file_map = map_d.map_ptr;
+    header = file_map;
+
+    section_header = file_map + header->e_shoff;
+    section_shst_enrty = section_header + header->e_shstrndx;
+    shst = file_map + section_shst_enrty->sh_offset;
+
+    print_relocation_data(file_map, section_header, header->e_shnum, shst);
+
+    munmap(file_map, map_d.size);
+    close(map_d.fd);
+
+    return;
+} 
+
 void quit(){
     exit(0);
 }
@@ -354,14 +453,25 @@ void display_menu(fun_desc function_desc[], int length){
     }
 }
 
+void get_input(char *input, size_t size, int new_line){
+    fgets(input, size, stdin);
+    sscanf(input, "%s\n", input);
+
+    if(new_line){
+        printf("\n");
+    }
+}
+
 void menu(){
     int option = 0;
     fun_desc function_desc[] = {{"Toggle Debug Mode", toggle_debug_mode}, {"Examine ELF File", examine_elf_file},
                                 {"Print Section Names", print_section_names}, {"Print Symbols", print_symbols},
+                                {"Relocation Tables", print_relocation},
                                 {"Quit", quit}, {NULL, NULL}};
     
     int menu_size = (int)(sizeof(function_desc)/sizeof(fun_desc) - 1);
     char option_input[menu_size+1];
+    char file_name[128];
 
     while(1){
         display_menu(function_desc, menu_size);
@@ -369,8 +479,10 @@ void menu(){
         fgets(option_input, menu_size, stdin);
         sscanf(option_input, "%d\n", &option);
         if((option > -1) & (option < menu_size)){
-            function_desc[option].fun();
+            get_input(file_name, 128, 1);
+            function_desc[option].fun(file_name);
         }
+        printf("\n");
     }
 }
 
