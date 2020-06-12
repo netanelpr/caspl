@@ -8,7 +8,6 @@ build_files:
 	./ver
 	mv ELFexec ELFexec2
 	cp ELFexec2short ELFexec
-
 .PHONY: clean
 
 clean:
